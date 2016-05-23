@@ -27,176 +27,34 @@
 
 if exists('g:autohighlight_loaded') && g:autohighlight_loaded
     finish
-elseif v:version < 704 || (v:version == 704 && !has('patch1594'))
-  echohl WarningMsg |
-        \ echomsg "AutoHighlight unavailable: requires Vim 7.4.1594+" |
+elseif !has('timers')
+    echohl WarningMsg |
+        \ echomsg "AutoHighlight unavailable: requires Vim compiled with +timers support." |
         \ echohl None
-  finish
+    finish
 endif
 
 " Support for |line-continuation|
 let s:save_cpo = &cpo
 set cpo&vim
 
-let w:matchId = -1
-let s:matchRegex = ''
-let s:timer = 0
-
-"{{{ Options
-
+" Options
 let g:AH_style = get(g:, 'AH_style', 'bold')
 let g:AH_timeout = get(g:, 'AH_timeout', 700)
 
-"}}}
-
-"{{{ Commands
-
-command! -bar AHOn call s:AHOn()
-command! -bar AHOff call s:AHOff()
-command! -bar AHToggle call s:AHToggle()
-
-function! s:AHToggle()
-    if exists('#autohighlight')
-        call s:AHOff()
-    else
-        call s:AHOn()
-    endif
-endfunction
-
-function! s:AHOn()
-    if !exists('#autohighlight')
-        call s:SetUpAutoCommands()
-        call s:SetUpMappings()
-        call s:OnCursorMoved()
-    endif
-endfunction
-
-function! s:AHOff()
-    if exists('#autohighlight')
-        call s:RemoveAutoCommands()
-        call s:RemoveMappings()
-        call s:MatchDelete()
-    endif
-endfunction
-
-"}}}
-
-"{{{ Autocommands and mappings
 
 augroup autohighlight_start
     " Defer autoload function calls
     autocmd VimEnter * call s:OnVimEnter()
 augroup END
 
-function! s:SetUpAutoCommands()
-    augroup autohighlight
-        autocmd!
-        autocmd CursorMoved * call s:OnCursorMoved()
-        autocmd InsertEnter * call s:OnInsertEntered()
-    augroup END
-endfunction
-
-function! s:RemoveAutoCommands()
-    au! autohighlight
-    augroup! autohighlight
-endfunction
-
-function! s:SetUpMappings()
-    nnoremap <silent> <LeftRelease> :call AHLightUp(0)<CR>
-endfunction
-
-function! s:RemoveMappings()
-    unmap <LeftRelease>
-endfunction
-
-"}}}
-
-"{{{ Event handlers
-
 function! s:OnVimEnter()
-    if g:AH_style == 'bold'
-        call autohighlight#colors#CreateBoldVariant('AHGroup', 'Normal')
-    elseif g:AH_style == 'italic'
-        call autohighlight#colors#CreateItalicVariant('AHGroup', 'Normal')
-    elseif g:AH_style == 'underlined'
-        call autohighlight#colors#CreateUnderlinedVariant('AHGroup', 'Normal')
-    else
-        throw "Unsupported AutoHighlight style, use on of these (bold|italic|underlined)."
-    endif
+    call autohighlight#Enable()
 endfunction
 
-function! s:OnCursorMoved()
-    if mode() != 'n'
-        return
-    endif
-
-    if getline(".")[col(".") - 1] !~# '\k' || synID(line("."), col("."), 1) != 0
-        call s:MatchDelete()
-        return
-    endif
-
-    let l:cword = expand('<cword>')
-    let l:match = '\V\<'.escape(l:cword, '\').'\>'
-    if l:match != s:matchRegex
-        call s:MatchDelete()
-        let s:matchRegex = l:match
-        call s:FireTimer()
-    endif
-endfunction
-
-function! s:OnInsertEntered()
-    call s:CancelTimer()
-    call s:MatchDelete()
-endfunction
-
-"}}}
-
-"{{{ Utility functions
-
-function! s:FireTimer()
-    call s:CancelTimer()
-    let s:timer = timer_start(g:AH_timeout, 'AHLightUp')
-endfunction
-
-function! s:CancelTimer()
-    call timer_stop(s:timer)
-    let s:timer = 0
-endfunction
-
-function! s:MatchDelete()
-    let s:matchRegex = ''
-    if exists('w:matchId') && w:matchId > 0
-        call matchdelete(w:matchId)
-        let w:matchId = 0
-    endif
-endfunction
-
-function! s:MatchAdd()
-    let w:matchId = matchadd('AHGroup', s:matchRegex, -1)
-endfunction
-
-"}}}
-
-function! AHLightUp(timer)
-    if a:timer == 0
-        if s:timer != 0
-            call s:CancelTimer()
-            call s:MatchAdd()
-        endif
-        return
-    endif
-    let s:timer = 0
-    call s:MatchAdd()
-endfunction
-
-call s:SetUpAutoCommands()
-call s:SetUpMappings()
-call s:OnCursorMoved()
 
 let g:autohighlight_loaded = 1
 
 " Restore previous 'cpo' value
 let &cpo = s:save_cpo
 unlet s:save_cpo
-
-" vim: foldmethod=marker foldmarker={{{,}}}
